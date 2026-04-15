@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Project Ragnala - Survey Panel</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700&display=swap');
+
+        :root {
+            --blue-main: #2563eb;
+            --blue-soft: #60a5fa;
+            --blue-deep: #1d4ed8;
+            --bg-dark: #020617;
+            --white-soft: #f9fafb;
+            --muted: #94a3b8;
+        }
+
+        body {
+            font-family: 'Poppins', sans-serif;
+            background: linear-gradient(145deg, #020617, #0f172a);
+            color: var(--white-soft);
+            margin: 0;
+            padding: 20px;
+        }
+
+        .app-shell {
+            max-width: 480px;
+            margin: auto;
+            background: #020617;
+            border-radius: 24px;
+            border: 1px solid rgba(148,163,184,0.3);
+            padding: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.8);
+        }
+
+        .fade-transition { transition: opacity .35s ease; }
+
+        #edit-users-btn {
+            position: fixed;
+            top: 16px;
+            right: 16px;
+            padding: 6px 14px;
+            font-size: 0.75rem;
+            background: #1d4ed8;
+            border-radius: 30px;
+            border: 1px solid #60a5fa;
+            color: white;
+            cursor: pointer;
+            z-index: 99;
+        }
+
+        .users-grid { display: grid; gap: 12px; }
+
+        .user-card {
+            background: #0f172a;
+            border: 1px solid #1d4ed8;
+            padding: 12px;
+            border-radius: 14px;
+            display: flex;
+            gap: 12px;
+            cursor: pointer;
+            transition: 0.15s;
+        }
+        .user-card:hover { transform: scale(1.02); border-color: #60a5fa; }
+
+        .avatar-circle {
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
+            background: #2563eb;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+        }
+
+        .edit-panel-backdrop {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.75);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 999;
+        }
+        .edit-panel-backdrop.show { display: flex; }
+
+        .edit-panel {
+            background: #020617;
+            border: 1px solid #2563eb;
+            padding: 16px;
+            border-radius: 16px;
+            width: 90%;
+            max-width: 450px;
+            max-height: 85vh;
+            overflow-y: auto;
+        }
+
+        .edit-row { border-bottom: 1px dashed #334155; padding: 8px 0; }
+    </style>
+</head>
+
+<body>
+
+<button id="edit-users-btn">✎ Edit User</button>
+
+<div class="app-shell">
+
+    <!-- WELCOME PAGE -->
+    <div id="welcome-page" class="fade-transition" style="opacity:1;">
+        <h1 class="text-2xl font-bold mb-2">Project Ragnala<br>Survey Panel</h1>
+        <p class="text-sm text-gray-400 mb-6">
+            Pusat akses survey terstruktur untuk setiap enumerator, terintegrasi dan mudah dipantau.
+        </p>
+
+        <button id="start-btn" class="px-6 py-3 rounded-full bg-blue-600 hover:bg-blue-700">
+            ENTER DASHBOARD
+        </button>
+    </div>
+
+    <!-- MAIN PAGE -->
+    <div id="main-view" class="fade-transition" style="display:none; opacity:0;">
+        <h2 class="text-xl font-bold mb-1">Project Ragnala Survey Hub</h2>
+        <p class="text-sm text-gray-400 mb-4">Pilih sesuai nama Anda.</p>
+
+        <div id="datetime-text" class="text-xs mb-4 text-blue-300"></div>
+
+        <div id="users-grid" class="users-grid"></div>
+        <p class="text-center text-xs mt-4 text-gray-500">
+            Pengelolaan user dilindungi password.
+        </p>
+    </div>
+
+    <!-- LINKS VIEW -->
+    <div id="user-links-view" class="fade-transition" style="display:none; opacity:0;">
+        <button id="back-from-links" class="mb-4 text-blue-300">← Kembali</button>
+        <h3 id="links-user-name" class="font-semibold mb-2"></h3>
+        <div id="links-buttons-container" class="links-buttons"></div>
+    </div>
+
+</div>
+
+<!-- EDIT PANEL -->
+<div id="edit-panel-backdrop" class="edit-panel-backdrop">
+    <div class="edit-panel">
+        <h3 class="font-bold mb-2">Kelola User</h3>
+        <div id="edit-users-list"></div>
+        <button id="edit-cancel" class="mt-3 px-4 py-2 bg-gray-600 rounded">Batal</button>
+        <button id="edit-save" class="mt-3 px-4 py-2 bg-blue-600 rounded">Simpan</button>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+
+    const DEFAULT_SURVEY_LINK =
+        "https://survey.xmfactory.com/survey?b=1025655&l=52472bf1b710780c";
+
+    const PASSWORD_EDIT = "Aco123";
+    const STORAGE_KEY = "projectRagnalaUsersV2";
+
+    const welcomePage = document.getElementById("welcome-page");
+    const startBtn = document.getElementById("start-btn");
+    const mainView = document.getElementById("main-view");
+    const usersGrid = document.getElementById("users-grid");
+    const datetimeText = document.getElementById("datetime-text");
+
+    const userLinksView = document.getElementById("user-links-view");
+    const backFromLinks = document.getElementById("back-from-links");
+    const linksUserName = document.getElementById("links-user-name");
+    const linksButtonsContainer = document.getElementById("links-buttons-container");
+
+    const editBtn = document.getElementById("edit-users-btn");
+    const editBackdrop = document.getElementById("edit-panel-backdrop");
+    const editUsersList = document.getElementById("edit-users-list");
+    const editCancel = document.getElementById("edit-cancel");
+    const editSave = document.getElementById("edit-save");
+
+    let users = [];
+
+    /* ------------------ DEFAULT USER LIST ------------------ */
+    function createDefaultUsers() {
+        return [
+            { id: "41000", name: "(41000)", mode: "single", links: [DEFAULT_SURVEY_LINK] },
+            { id: "42000", name: "(42000)", mode: "single", links: [DEFAULT_SURVEY_LINK] },
+            { id: "43000", name: "(43000)", mode: "single", links: [DEFAULT_SURVEY_LINK] },
+            { id: "44000", name: "(44000)", mode: "single", links: [DEFAULT_SURVEY_LINK] },
+            { id: "45000", name: "(45000)", mode: "single", links: [DEFAULT_SURVEY_LINK] },
+            { id: "46000", name: "(46000)", mode: "single", links: [DEFAULT_SURVEY_LINK] },
+            { id: "47000", name: "(47000)", mode: "single", links: [DEFAULT_SURVEY_LINK] },
+            { id: "48000", name: "(48000)", mode: "single", links: [DEFAULT_SURVEY_LINK] },
+            { id: "48000", name: "(49000)", mode: "single", links: [DEFAULT_SURVEY_LINK] },
+            { id: "48000", name: "(50000)", mode: "single", links: [DEFAULT_SURVEY_LINK] },
+            { id: "48000", name: "(51000)", mode: "single", links: [DEFAULT_SURVEY_LINK] },
+            { id: "48000", name: "(52000)", mode: "single", links: [DEFAULT_SURVEY_LINK] },
+            { id: "48000", name: "(53000)", mode: "single", links: [DEFAULT_SURVEY_LINK] },
+            { id: "48000", name: "(54000)", mode: "single", links: [DEFAULT_SURVEY_LINK] },
+            { id: "48000", name: "(55000)", mode: "single", links: [DEFAULT_SURVEY_LINK] },
+            { id: "48000", name: "(56000)", mode: "single", links: [DEFAULT_SURVEY_LINK] },
+            { id: "48000", name: "(57000)", mode: "single", links: [DEFAULT_SURVEY_LINK] },
+            { id: "48000", name: "(58000)", mode: "single", links: [DEFAULT_SURVEY_LINK] },
+            { id: "48000", name: "(59000)", mode: "single", links: [DEFAULT_SURVEY_LINK] },
+            { id: "48000", name: "(60000)", mode: "single", links: [DEFAULT_SURVEY_LINK] },
+            { id: "48000", name: "(61000)", mode: "single", links: [DEFAULT_SURVEY_LINK] },
+            { id: "48000", name: "(62000)", mode: "single", links: [DEFAULT_SURVEY_LINK] },
+            { id: "48000", name: "(63000)", mode: "single", links: [DEFAULT_SURVEY_LINK] },
+            { id: "48000", name: "(64000)", mode: "single", links: [DEFAULT_SURVEY_LINK] },
+            { id: "49000", name: "(65000)", mode: "single", links: [DEFAULT_SURVEY_LINK] }
+        ];
+    }
+
+    /* ------------------ LOAD USERS ------------------ */
+    function loadUsers() {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) {
+            users = createDefaultUsers();
+            saveUsers();
+        } else {
+            users = JSON.parse(raw);
+        }
+    }
+
+    function saveUsers() {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(users));
+    }
+
+    /* ------------------ RENDER LIST ------------------ */
+    function renderUserGrid() {
+        usersGrid.innerHTML = "";
+        users.forEach((u, i) => {
+            const card = document.createElement("div");
+            card.className = "user-card";
+            card.innerHTML = `
+                <div class="avatar-circle">${i + 1}</div>
+                <div>
+                    <div class="font-semibold">${u.name}</div>
+                    <div class="text-xs text-gray-400">ID: ${u.id}</div>
+                </div>
+            `;
+            card.addEventListener("click", () => window.open(u.links[0], "_blank"));
+            usersGrid.appendChild(card);
+        });
+    }
+
+    /* ---------------- TIME ---------------- */
+    function updateTime() {
+        datetimeText.textContent = new Date().toLocaleString("id-ID", {
+            weekday: "long", year: "numeric", month: "long", day: "numeric",
+            hour: "2-digit", minute: "2-digit", second: "2-digit"
+        });
+    }
+
+    /* ---------------- EDIT PANEL ---------------- */
+    editBtn.addEventListener("click", () => {
+        const pwd = prompt("Masukkan password:");
+        if (pwd !== PASSWORD_EDIT) return alert("Password salah!");
+
+        editBackdrop.classList.add("show");
+        editUsersList.innerHTML = users
+            .map(u => `<div class="edit-row">${u.name}</div>`)
+            .join("");
+    });
+
+    editCancel.addEventListener("click", () => editBackdrop.classList.remove("show"));
+    editSave.addEventListener("click", () => {
+        editBackdrop.classList.remove("show");
+        saveUsers();
+        renderUserGrid();
+    });
+
+    /* ---------------- WELCOME → MAIN ---------------- */
+    startBtn.addEventListener("click", () => {
+        welcomePage.style.opacity = 0;
+        setTimeout(() => {
+            welcomePage.style.display = "none";
+            mainView.style.display = "block";
+            mainView.style.opacity = 1;
+        }, 300);
+    });
+
+    /* ---------------- INIT ---------------- */
+    loadUsers();
+    renderUserGrid();
+    updateTime();
+    setInterval(updateTime, 1000);
+
+});
+</script>
+
+</body>
+</html>
